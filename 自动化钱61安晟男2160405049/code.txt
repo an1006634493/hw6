@@ -1,0 +1,128 @@
+加噪声（高斯与椒盐）：
+clear;
+clc;
+
+img=imread('lena.bmp');
+m = 0.1;
+v = 0.1;
+img_noise_gaussian = imnoise(img,'gaussian',m,v);%高斯噪声
+img_noise_sp = imnoise(img,'salt & pepper',0.1);%椒盐噪声
+
+%中值滤波
+img_gaussian_med = medfilt2(img_noise_gaussian,[3,3]);
+img_sp_med = medfilt2(img_noise_sp,[3,3]);
+
+%均值滤波
+h=fspecial('average');
+img_gaussian_mean = filter2(h,img_noise_gaussian);
+img_sp_mean = filter2(h,img_noise_sp);
+
+%反谐波分析
+Q1=0.25;
+Q2=-0.25;
+img_gaussian_Q_pos=imfilter(double(img_noise_gaussian).^(Q1+1),fspecial('average',3))./imfilter(double(img_noise_gaussian).^Q1,fspecial('average',3));
+img_gaussian_Q_neg=imfilter(double(img_noise_gaussian).^(Q2+1),fspecial('average',3))./imfilter(double(img_noise_gaussian).^Q2,fspecial('average',3));
+img_sp_Q_pos=imfilter(double(img_noise_sp).^(Q1+1),fspecial('average',3))./imfilter(double(img_noise_sp).^Q1,fspecial('average',3));
+img_sp_Q_neg=imfilter(double(img_noise_sp).^(Q2+1),fspecial('average',3))./imfilter(double(img_noise_sp).^Q2,fspecial('average',3));
+
+img_noise_gaussian = uint8(img_noise_gaussian);
+img_gaussian_med = uint8(img_gaussian_med);
+img_gaussian_mean = uint8(img_gaussian_mean);
+img_gaussian_Q_pos = uint8(img_gaussian_Q_pos);
+img_gaussian_Q_neg = uint8(img_gaussian_Q_neg);
+img_noise_sp = uint8(img_noise_sp);
+img_sp_med = uint8(img_sp_med);
+img_sp_mean = uint8(img_sp_mean);
+img_sp_Q_pos = uint8(img_sp_Q_pos);
+img_sp_Q_neg = uint8(img_sp_Q_neg);
+
+subplot(2,5,1);imshow(img_noise_gaussian);title("lena加高斯噪声");
+subplot(2,5,2);imshow(img_gaussian_med);title("高斯噪声中值滤波");
+subplot(2,5,3);imshow(img_gaussian_mean);title("高斯噪声均值滤波");
+subplot(2,5,4);imshow(img_gaussian_Q_pos);title("高斯噪声逆滤波Q>0");
+subplot(2,5,5);imshow(img_gaussian_Q_neg);title("高斯噪声逆滤波Q<0");
+subplot(2,5,6);imshow(img_noise_sp);title("lena加椒盐噪声");
+subplot(2,5,7);imshow(img_sp_med);title("椒盐噪声中值滤波");
+subplot(2,5,8);imshow(img_sp_mean);title("椒盐噪声均值滤波");
+subplot(2,5,9);imshow(img_sp_Q_pos);title("椒盐噪声逆滤波Q>0");
+subplot(2,5,10);imshow(img_sp_Q_neg);title("椒盐噪声逆滤波Q<0");
+
+运动模糊：
+clear;
+clc;
+
+img=imread('lena.bmp');
+img_f=fft2(double(img));  %傅里叶变换得到频谱
+img_f=fftshift(img_f);
+[x,y]=size(img_f); 
+img_lpf=zeros(x,y);
+T=1;
+a=0.015;
+b=0.015;
+for u=1:x
+    for v=1:y
+        h(u,v)=T/(pi*(u*a+v*b))*sin(pi*(u*a+v*b))*exp(-1i*pi*(u*a+v*b));
+        img_lpf(u,v)=h(u,v)*img_f(u,v);  
+    end
+end
+
+img_pass=ifftshift(img_lpf);    %反傅里叶变换
+img_pass=ifft2(img_pass); 
+img_pass=256.*img_pass./max(max(img_pass));
+img_pass=uint8(real(img_pass));
+
+img_pass_f=fft2(double(img_pass));
+img_pass_f=fftshift(img_pass_f);
+img_lpf=zeros(x,y);
+K=10;
+for u=1:x
+    for v=1:y
+        f(u,v)=1/h(u,v)*(abs(h(u,v))^2/(abs(h(u,v))^2 + K));
+        img_lpf(u,v)=f(u,v)*img_pass_f(u,v);  
+    end
+end
+
+img_rec=ifftshift(img_lpf);    %反傅里叶变换
+img_rec=ifft2(img_rec); 
+img_rec=256.*img_rec./max(max(img_rec));
+img_rec=uint8(real(img_rec));
+
+
+figure(1)
+imshow(img_pass)
+figure(2)
+imshow(img_rec)
+
+维纳滤波器手写：
+clear;
+clc;
+
+img=imread('lena.bmp');
+PSF = fspecial('motion',25,-45);
+img_move = imfilter(img,PSF,'conv','circular');
+
+m = 0;
+v = 0.001;
+img_move_gaussian = imnoise(img_move,'gaussian',m,v);
+
+img_recover = wiener2(img_move);
+
+figure(1)
+imshow(img_move)
+figure(2)
+imshow(img_recover)
+
+运动模糊matlab函数：
+I=imread('lena.bmp');
+H=fspecial('motion',50,45);
+I1=imfilter(I,H,'circular','conv');
+figure(1);
+imshow(I1);
+title('运动模糊后的lena.bmp(角度为45度)');
+I2=imnoise(I1,'gaussian',0,0.01);
+
+维纳滤波器matlab函数：
+I=deconvwnr(img,H,NSR);
+
+最小二乘方滤波matlab函数：
+[g,LAGRA]=deconvreg(img,h,NoisePower);
